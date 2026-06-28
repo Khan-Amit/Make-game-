@@ -1,0 +1,27 @@
+function handleCanvasTouch(e) {
+    if (!editMode) return;
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const clickX = ((touch.clientX - rect.left) / rect.width) * canvas.width;
+    const clickY = ((touch.clientY - rect.top) / rect.height) * canvas.height;
+    
+    const tileX = Math.floor(clickX / TILE_SIZE);
+    const tileY = Math.floor(clickY / TILE_SIZE);
+    
+    if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
+        const idx = tileY * COLS + tileX;
+        // Edit inside the active room slice
+        multiTileMap[currentRoom][idx] = multiTileMap[currentRoom][idx] === currentTool ? 0 : currentTool; 
+    }
+}
+
+function checkCollision(x, y) {
+    const tX = Math.floor(x / TILE_SIZE);
+    const tY = Math.floor(y / TILE_SIZE);
+    // Boundary check: Allow scrolling to adjacent rooms by returning open air for left/right edges
+    if (tX < 0 || tX >= COLS) return false; 
+    if (tY < 0 || tY >= ROWS) return true; // Treat ceiling and pits as solid or hazardous
+    
+    return multiTileMap[currentRoom][tY * COLS + tX] === 1;
+}
