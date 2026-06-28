@@ -2,28 +2,83 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MakeGame Mobile Engine</title>
+    <title>MakeGame Mobile Engine Core</title>
     <style>
-        body { margin: 0; background: #222; color: #fff; font-family: sans-serif; text-align: center; touch-action: manipulation; }
-        canvas { background: #111; display: block; margin: 10px auto; border: 2px solid #444; max-width: 95vw; max-height: 50vh; }
-        .controls { display: flex; justify-content: center; gap: 10px; margin-top: 5px; }
-        button { padding: 12px 20px; font-weight: bold; background: #444; color: white; border: none; border-radius: 5px; }
-        button:active { background: #666; }
-        .dpad { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(2, 60px); gap: 10px; justify-content: center; margin-top: 15px; }
-        .dbtn { background: #ff5722; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        body { 
+            margin: 0; 
+            background: #1e1e24; 
+            color: #ffffff; 
+            font-family: -apple-system, sans-serif; 
+            text-align: center; 
+            touch-action: manipulation; 
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        h3 { margin: 10px 0 5px 0; font-size: 1.1rem; color: #bbb; }
+        canvas { 
+            background: #0d0d11; 
+            display: block; 
+            margin: 5px auto; 
+            border: 2px solid #3a3a4a; 
+            border-radius: 8px;
+            max-width: 95vw; 
+            max-height: 45vh; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+        .controls { 
+            display: flex; 
+            justify-content: center; 
+            gap: 12px; 
+            margin: 8px auto;
+            width: 95vw;
+        }
+        button { 
+            flex: 1;
+            padding: 14px; 
+            font-size: 0.9rem;
+            font-weight: bold; 
+            background: #2d2d3a; 
+            color: #fff; 
+            border: 1px solid #4a4a5a; 
+            border-radius: 8px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        button:active { background: #444456; }
+        .dpad { 
+            display: grid; 
+            grid-template-columns: repeat(3, 70px); 
+            grid-template-rows: repeat(2, 70px); 
+            gap: 12px; 
+            justify-content: center; 
+            margin-top: 10px; 
+        }
+        .dbtn { 
+            background: #e65100; 
+            border: 1px solid #ffb74d;
+            border-radius: 16px; 
+            width: 70px; 
+            height: 70px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-size: 24px; 
+            color: white;
+            box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+        }
+        .dbtn:active { background: #bf360c; transform: translateY(2px); box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
 
-    <h3>📱 MakeGame Engine Mobile Workspace</h3>
+    <h3>📱 MakeGame Engine Mobile Core Layout</h3>
     <canvas id="gameCanvas" width="480" height="320"></canvas>
 
     <div class="controls">
-        <button onclick="toggleMode()">Mode: <span id="modeText">Edit Grid</span></button>
-        <button onclick="exportStandalone()" style="background:#4CAF50;">Export Standalone App</button>
+        <button onclick="toggleMode()">MODE: <span id="modeText" style="color:#ffeb3b;">Edit Grid</span></button>
+        <button onclick="exportStandalone()" style="background:#2e7d32; border-color:#81c784;">Build App File</button>
     </div>
 
-    <!-- On-screen mobile touch D-Pad for Prince of Persia movement -->
+    <!-- On-screen mobile touch D-Pad matrix interface -->
     <div class="dpad">
         <div class="dbtn" ontouchstart="movePlayer('LEFT')" ontouchend="stopPlayer()">◀</div>
         <div class="dbtn" ontouchstart="movePlayer('JUMP')">▲</div>
@@ -39,110 +94,179 @@ const ctx = canvas.getContext("2d");
 const TILE_SIZE = 32;
 const COLS = 15;
 const ROWS = 10;
-let editMode = true; // Start in Editor mode
+let editMode = true; 
 
-// 1. In-House Grid Layout Matrix (0 = Empty, 1 = Floor Block)
+// Base grid architecture: 0 = air, 1 = solid floor
 let tileMap = Array(COLS * ROWS).fill(0);
-// Build a default base platform floor
-for(let x=0; x<COLS; x++) tileMap[(ROWS-1)*COLS + x] = 1; 
+for(let x = 0; x < COLS; x++) {
+    tileMap[(ROWS - 1) * COLS + x] = 1; 
+}
 
-// 2. Rigid Human Structure Model
+// Rigid Human Structure State Machine Definition
 let player = {
     x: 64, y: 64,
     velX: 0, velY: 0,
-    state: "IDLE", // IDLE, RUNNING, LEAPING
-    facingRight: true
+    state: "IDLE", 
+    facingRight: true,
+    animFrame: 0
 };
 
-// Toggle between Level Editor mode and Play Testing mode
 function toggleMode() {
     editMode = !editMode;
-    document.getElementById("modeText").innerText = editMode ? "Edit Grid" : "Play Test";
-    if(!editMode) { // Reset player position when entering play mode
-        player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
+    const modeText = document.getElementById("modeText");
+    if (editMode) {
+        modeText.innerText = "Edit Grid";
+        modeText.style.color = "#ffeb3b";
+    } else {
+        modeText.innerText = "Play Test";
+        modeText.style.color = "#00e676";
+        // Reset player placement state context
+        player.x = 64; 
+        player.y = 64; 
+        player.velX = 0; 
+        player.velY = 0; 
+        player.state = "IDLE";
     }
 }
 
-// Touch grid handler for designing layout on phone screen
-canvas.addEventListener("touchstart", function(e) {
+// Handle touch coordinate tracking directly across scale bounds
+function handleCanvasTouch(e) {
     if (!editMode) return;
+    e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const touch = e.touches[0];
     const clickX = ((touch.clientX - rect.left) / rect.width) * canvas.width;
     const clickY = ((touch.clientY - rect.top) / rect.height) * canvas.height;
     
-    int tileX = Math.floor(clickX / TILE_SIZE);
-    int tileY = Math.floor(clickY / TILE_SIZE);
+    const tileX = Math.floor(clickX / TILE_SIZE);
+    const tileY = Math.floor(clickY / TILE_SIZE);
     
     if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
-        int idx = tileY * COLS + tileX;
-        tileMap[idx] = tileMap[idx] === 0 ? 1 : 0; // Toggle block layout
+        const idx = tileY * COLS + tileX;
+        tileMap[idx] = tileMap[idx] === 0 ? 1 : 0; 
     }
-});
+}
 
-// 3. Mobile Input Routing Matrix
-function movePlayer(dir) {
-    if (editMode) return;
-    if (dir === "LEFT") { player.velX = -3; player.facingRight = false; player.state = "RUNNING"; }
-    if (dir === "RIGHT") { player.velX = 3; player.facingRight = true; player.state = "RUNNING"; }
-    if (dir === "JUMP" && player.state !== "LEAPING") { player.velY = -8; player.state = "LEAPING"; }
-}
-function stopPlayer() {
-    if (editMode) return;
-    player.velX = 0;
-    if (player.state === "RUNNING") player.state = "IDLE";
-}
+canvas.addEventListener("touchstart", handleCanvasTouch, {passive: false});
 
 function checkCollision(x, y) {
-    int tX = Math.floor(x / TILE_SIZE);
-    int tY = Math.floor(y / TILE_SIZE);
+    const tX = Math.floor(x / TILE_SIZE);
+    const tY = Math.floor(y / TILE_SIZE);
     if (tX < 0 || tX >= COLS || tY < 0 || tY >= ROWS) return true;
     return tileMap[tY * COLS + tX] === 1;
 }
 
-// Engine core update/render frame processing loop
+// Mobile runtime input router matching standard movement engine requirements
+function movePlayer(dir) {
+    if (editMode) return;
+    
+    // Rigid ledge actions override default translation calls
+    if (player.state === "HANGING") {
+        if (dir === "JUMP") {
+            player.state = "CLIMBING";
+            player.animFrame = 0;
+        }
+        if (dir === "CROUCH") {
+            player.state = "LEAPING"; 
+            player.y += 4; 
+        }
+        return;
+    }
+
+    if (player.state === "CLIMBING") return;
+
+    if (dir === "LEFT") { player.velX = -3; player.facingRight = false; player.state = "RUNNING"; }
+    if (dir === "RIGHT") { player.velX = 3; player.facingRight = true; player.state = "RUNNING"; }
+    if (dir === "JUMP" && player.state !== "LEAPING") { player.velY = -7.5; player.state = "LEAPING"; }
+}
+
+function stopPlayer() {
+    if (editMode || player.state === "HANGING" || player.state === "CLIMBING") return;
+    player.velX = 0;
+    if (player.state === "RUNNING") player.state = "IDLE";
+}
+
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Draw Map Grid blocks
-    for(let y=0; y<ROWS; y++) {
-        for(let x=0; x<COLS; x++) {
-            if(tileMap[y*COLS + x] === 1) {
-                ctx.fillStyle = "#795548"; // Floor Block color
-                ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                ctx.strokeStyle = "#5d4037";
-                ctx.strokeRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    // Rasterize platform data configurations onto view panel
+    for(let y = 0; y < ROWS; y++) {
+        for(let x = 0; x < COLS; x++) {
+            if(tileMap[y * COLS + x] === 1) {
+                ctx.fillStyle = "#4e342e"; 
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.strokeStyle = "#3e2723";
+                ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            } else {
+                ctx.strokeStyle = "rgba(255,255,255,0.03)";
+                ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
             }
         }
     }
 
-    // Engine Physics Logic Process
+    // Engine framework step routing evaluations
     if (!editMode) {
-        player.velY += 0.4; // Apply constant gravity element
-        
-        // Horizontal check
-        player.x += player.velX;
-        if(checkCollision(player.x + 8, player.y + 16) || checkCollision(player.x + 24, player.y + 16)) {
-            player.x -= player.velX;
-        }
+        if (player.state !== "HANGING" && player.state !== "CLIMBING") {
+            player.velY += 0.38; // System gravity acceleration constants
+            
+            player.x += player.velX;
+            if(checkCollision(player.x + 8, player.y + 4) || checkCollision(player.x + 24, player.y + 4) ||
+               checkCollision(player.x + 8, player.y + 28) || checkCollision(player.x + 24, player.y + 28)) {
+                player.x -= player.velX;
+            }
 
-        // Vertical check
-        player.y += player.velY;
-        if (checkCollision(player.x + 16, player.y + 32)) { // Landed on floor
-            player.y = Math.floor(player.y / TILE_SIZE) * TILE_SIZE;
-            player.velY = 0;
-            if(player.state === "LEAPING") player.state = "IDLE";
+            player.y += player.velY;
+            
+            // Prince of Persia structural ledge detection raycasts
+            if (player.state === "LEAPING" && player.velY > 0) {
+                let handX = player.facingRight ? (player.x + 22) : (player.x + 10);
+                let handY = player.y + 4; 
+                
+                if (checkCollision(handX, handY) && !checkCollision(handX, handY - TILE_SIZE)) {
+                    player.state = "HANGING";
+                    player.velX = 0;
+                    player.velY = 0;
+                    
+                    let targetTileX = Math.floor(handX / TILE_SIZE);
+                    player.x = player.facingRight ? (targetTileX * TILE_SIZE - 20) : (targetTileX * TILE_SIZE + TILE_SIZE - 12);
+                    player.y = Math.floor(handY / TILE_SIZE) * TILE_SIZE;
+                }
+            }
+
+            if (checkCollision(player.x + 12, player.y + 32) || checkCollision(player.x + 20, player.y + 32)) { 
+                player.y = Math.floor(player.y / TILE_SIZE) * TILE_SIZE;
+                player.velY = 0;
+                if(player.state === "LEAPING") player.state = "IDLE";
+            } else if (player.state === "IDLE" || player.state === "RUNNING") {
+                player.state = "LEAPING";
+            }
+        } else if (player.state === "CLIMBING") {
+            player.animFrame++;
+            player.y -= 2; 
+            
+            if (player.animFrame >= 16) { 
+                player.y = player.y - 4;
+                player.x += player.facingRight ? 18 : -18;
+                player.state = "IDLE";
+                player.animFrame = 0;
+            }
         }
     }
 
-    // Draw Player Body Hitbox (Prince of Persia style vector character)
-    ctx.fillStyle = editMode ? "#ffeb3b" : "#00bcd4";
-    ctx.fillRect(player.x + 8, player.y, 16, 32); // Draw skeletal hitbox body
+    // Set layout fill color profiles based on structural movement flags
+    if (editMode) ctx.fillStyle = "#ffeb3b";
+    else if (player.state === "HANGING") ctx.fillStyle = "#e91e63";
+    else if (player.state === "CLIMBING") ctx.fillStyle = "#00e676";
+    else if (player.state === "LEAPING") ctx.fillStyle = "#ff9100";
+    else ctx.fillStyle = "#00e5ff";
+
+    // Draw active structural model body elements
+    ctx.fillRect(player.x + 8, player.y, 16, 32);
 
     requestAnimationFrame(gameLoop);
 }
 
-// 4. Standalone Code Injection Exporter
+// In-House standalone template serializer system block
 function exportStandalone() {
     const serializedMap = JSON.stringify(tileMap);
     const standaloneCode = document.documentElement.outerHTML.replace(
@@ -151,14 +275,3 @@ function exportStandalone() {
     );
     
     const blob = new Blob([standaloneCode], {type: "text/html"});
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "MyStandalonePlatformer.html";
-    a.click();
-    alert("🚀 Standalone App Package downloaded directly to your phone!");
-}
-
-gameLoop();
-</script>
-</body>
-</html>
