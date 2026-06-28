@@ -99,11 +99,11 @@
     <canvas id="gameCanvas" width="480" height="320"></canvas>
 
     <div class="controls">
-        <button id="createModeBtn" onclick="openCreatorPage()" style="background:#6a1b9a; border-color:#8e24aa;">CREATE</button>
+        <button id="createModeBtn" onclick="openCreatorPage()">CREATE</button>
         <button id="editBtn" onclick="setEngineMode('EDIT')" style="background:#fbc02d; color:#000; border-color:#fdd835;">EDIT</button>
         <button id="runBtn" onclick="setEngineMode('RUN')" style="background:#2d2d3a; color:#fff;">RUN</button>
-        <button id="compileBtn" onclick="compileProjectInMemory()" style="background:#0288d1; border-color:#29b6f6;">COMPILE</button>
-        <button id="exportBtn" onclick="exportStandaloneFile()" style="background:#2e7d32; border-color:#81c784;">EXPORT</button>
+        <button id="compileBtn" onclick="compileProjectInMemory()">COMPILE</button>
+        <button id="exportBtn" onclick="exportStandaloneFile()">EXPORT</button>
         <button id="roomBtn" onclick="cycleRoomsManual()">ROOM: <span id="roomText" style="color:#00e5ff;">0</span></button>
         <button id="toolBtn" onclick="toggleTool()" style="background:#5c5c7a; grid-column: span 3;">TOOL: <span style="color:#ff9100;">Floor</span></button>
     </div>
@@ -188,20 +188,21 @@ let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fi
 let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); 
 
-// Preload solid ground floors across all layouts
+// Preload terrain lines maps
 for (let r = 0; r < TOTAL_ROOMS; r++) {
     for (let x = 0; x < COLS; x++) {
         multiTileMap[r][(ROWS - 1) * COLS + x] = 1; 
     }
 }
-// Room 0 Challenges setup
-multiTileMap[7 * COLS + 4] = 1; multiTileMap[7 * COLS + 5] = 1; multiTileMap[7 * COLS + 6] = 1;
+multiTileMap[7 * COLS + 4] = 1;
+multiTileMap[7 * COLS + 5] = 1;
+multiTileMap[7 * COLS + 6] = 1;
 multiTileMap[(ROWS - 1) * COLS + 9] = 2; 
 guardSpawnMap[8 * COLS + 5] = 1;        
 
-// Room 1 Challenges setup
 itemSpawnMap[5 * COLS + 4] = 4;          
-multiTileMap[7 * COLS + 10] = 1; multiTileMap[6 * COLS + 10] = 1;
+multiTileMap[7 * COLS + 10] = 1;
+multiTileMap[6 * COLS + 10] = 1;
 itemSpawnMap[8 * COLS + 10] = 5;         
 
 let activeGuards = [];
@@ -224,3 +225,4 @@ function playSound(type) {
         osc.type = "triangle"; osc.frequency.setValueAtTime(300, now); osc.frequency.linearRampToValueAtTime(100, now + 0.25);
         gain.gain.setValueAtTime(0.25, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25); osc.start(now); osc.stop(now + 0.25);
     } else if (type === "hurt") {
+        osc.type = "sawtooth"; osc.frequency.setValueAtTime(120, now); osc.frequency.linearRampToValueAtTime(80, now + 0.15);
