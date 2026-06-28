@@ -194,16 +194,16 @@ for (let r = 0; r < TOTAL_ROOMS; r++) {
         multiTileMap[r][(ROWS - 1) * COLS + x] = 1; 
     }
 }
-multiTileMap[0][7 * COLS + 4] = 1;
-multiTileMap[0][7 * COLS + 5] = 1;
-multiTileMap[0][7 * COLS + 6] = 1;
-multiTileMap[0][(ROWS - 1) * COLS + 9] = 2; 
-guardSpawnMap[0][8 * COLS + 5] = 1;        
+multiTileMap[7 * COLS + 4] = 1;
+multiTileMap[7 * COLS + 5] = 1;
+multiTileMap[7 * COLS + 6] = 1;
+multiTileMap[(ROWS - 1) * COLS + 9] = 2; 
+guardSpawnMap[8 * COLS + 5] = 1;        
 
-itemSpawnMap[1][5 * COLS + 4] = 4;          
-multiTileMap[1][7 * COLS + 10] = 1;
-multiTileMap[1][6 * COLS + 10] = 1;
-itemSpawnMap[1][8 * COLS + 10] = 5;         
+itemSpawnMap[5 * COLS + 4] = 4;          
+multiTileMap[7 * COLS + 10] = 1;
+multiTileMap[6 * COLS + 10] = 1;
+itemSpawnMap[8 * COLS + 10] = 5;         
 
 let activeGuards = [];
 let runtimeItemMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
