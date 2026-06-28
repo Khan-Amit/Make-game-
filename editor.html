@@ -28,14 +28,14 @@
         .controls { 
             display: flex; 
             justify-content: center; 
-            gap: 12px; 
+            gap: 8px; 
             margin: 8px auto;
             width: 95vw;
         }
         button { 
             flex: 1;
-            padding: 14px; 
-            font-size: 0.9rem;
+            padding: 12px 6px; 
+            font-size: 0.8rem;
             font-weight: bold; 
             background: #2d2d3a; 
             color: #fff; 
@@ -75,6 +75,7 @@
 
     <div class="controls">
         <button onclick="toggleMode()">MODE: <span id="modeText" style="color:#ffeb3b;">Edit Grid</span></button>
+        <button id="roomBtn">ROOM: <span id="roomText" style="color:#00e5ff;">0</span></button>
         <button id="toolBtn" onclick="toggleTool()" style="background:#5c5c7a;">TOOL: <span style="color:#ff9100;">Floor</span></button>
         <button onclick="exportStandalone()" style="background:#2e7d32; border-color:#81c784;">Build App File</button>
     </div>
@@ -95,17 +96,25 @@ const ctx = canvas.getContext("2d");
 const TILE_SIZE = 32;
 const COLS = 15;
 const ROWS = 10;
+const SCREEN_SIZE = COLS * ROWS;
+const TOTAL_ROOMS = 3; 
+
 let editMode = true; 
 let currentTool = 1; // 1 = Floor Block, 2 = Lethal Spikes
 const DEATH_TIMER_MAX = 45; 
+let currentRoom = 0; 
 
-// Base grid architecture: 0 = air, 1 = solid floor, 2 = spikes
-let tileMap = Array(COLS * ROWS).fill(0);
-for(let x = 0; x < COLS; x++) {
-    tileMap[(ROWS - 1) * COLS + x] = 1; 
+// Setup Multi-Screen Space Array
+let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
+
+// Generate base platforms across all rooms
+for (let r = 0; r < TOTAL_ROOMS; r++) {
+    for (let x = 0; x < COLS; x++) {
+        multiTileMap[r][(ROWS - 1) * COLS + x] = 1; 
+    }
 }
 
-// Rigid Human Structure State Machine Definition
+// Rigid Human Structure State Machine Configuration
 let player = {
     x: 64, y: 64,
     velX: 0, velY: 0,
@@ -123,7 +132,8 @@ function toggleMode() {
     } else {
         modeText.innerText = "Play Test";
         modeText.style.color = "#00e676";
-        // Reset player placement state context
+        // Reset player placement configuration state
+        currentRoom = 0;
         player.x = 64; 
         player.y = 64; 
         player.velX = 0; 
@@ -139,7 +149,12 @@ function toggleTool() {
         'TOOL: <span style="color:#ff1744;">Spikes</span>';
 }
 
-// Handle touch coordinate tracking directly across scale bounds
+document.getElementById("roomBtn").addEventListener("click", function() {
+    if (!editMode) return; 
+    currentRoom = (currentRoom + 1) % TOTAL_ROOMS;
+});
+
+// Coordinate pointer translator across varying screens
 function handleCanvasTouch(e) {
     if (!editMode) return;
     e.preventDefault();
@@ -153,7 +168,7 @@ function handleCanvasTouch(e) {
     
     if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
         const idx = tileY * COLS + tileX;
-        tileMap[idx] = tileMap[idx] === currentTool ? 0 : currentTool; 
+        multiTileMap[currentRoom][idx] = multiTileMap[currentRoom][idx] === currentTool ? 0 : currentTool; 
     }
 }
 
@@ -162,15 +177,15 @@ canvas.addEventListener("touchstart", handleCanvasTouch, {passive: false});
 function checkCollision(x, y) {
     const tX = Math.floor(x / TILE_SIZE);
     const tY = Math.floor(y / TILE_SIZE);
-    if (tX < 0 || tX >= COLS || tY < 0 || tY >= ROWS) return true;
-    return tileMap[tY * COLS + tX] === 1; // Only tile type 1 blocks horizontal/vertical passage
+    if (tX < 0 || tX >= COLS) return false; 
+    if (tY < 0 || tY >= ROWS) return true; 
+    return multiTileMap[currentRoom][tY * COLS + tX] === 1;
 }
 
-// Mobile runtime input router matching standard movement engine requirements
+// Mobile movement manager tracking state overrides
 function movePlayer(dir) {
     if (editMode || player.state === "DEAD") return;
     
-    // Rigid ledge actions override default translation calls
     if (player.state === "HANGING") {
         if (dir === "JUMP") {
             player.state = "CLIMBING";
@@ -198,11 +213,14 @@ function stopPlayer() {
 
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    document.getElementById("roomText").innerText = currentRoom;
 
-    // Rasterize platform data configurations onto view panel
+    let activeMap = multiTileMap[currentRoom];
+
+    // 1. Rasterize current environment maps onto display grid panel
     for(let y = 0; y < ROWS; y++) {
         for(let x = 0; x < COLS; x++) {
-            const tile = tileMap[y * COLS + x];
+            const tile = activeMap[y * COLS + x];
             if(tile === 1) {
                 ctx.fillStyle = "#4e342e"; 
                 ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -226,17 +244,36 @@ function gameLoop() {
         }
     }
 
-    // Engine framework step routing evaluations
+    // 2. Physics logic tracking computations
     if (!editMode) {
         if (player.state === "DEAD") {
             player.animFrame--;
             if (player.animFrame <= 0) { 
+                currentRoom = 0;
                 player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
             }
         } else if (player.state !== "HANGING" && player.state !== "CLIMBING") {
-            player.velY += 0.38; // System gravity acceleration constants
+            player.velY += 0.38; 
             
             player.x += player.velX;
+
+            // Multi-Room Edge Trigger Evaluation Blocks
+            if (player.x > canvas.width - 12) { 
+                if (currentRoom < TOTAL_ROOMS - 1) {
+                    currentRoom++;
+                    player.x = 4; 
+                } else {
+                    player.x = canvas.width - 12; 
+                }
+            } else if (player.x < -4) { 
+                if (currentRoom > 0) {
+                    currentRoom--;
+                    player.x = canvas.width - 20; 
+                } else {
+                    player.x = -4; 
+                }
+            }
+
             if(checkCollision(player.x + 8, player.y + 4) || checkCollision(player.x + 24, player.y + 4) ||
                checkCollision(player.x + 8, player.y + 28) || checkCollision(player.x + 24, player.y + 28)) {
                 player.x -= player.velX;
@@ -244,24 +281,3 @@ function gameLoop() {
 
             player.y += player.velY;
             
-            // Prince of Persia structural ledge detection raycasts
-            if (player.state === "LEAPING" && player.velY > 0) {
-                let handX = player.facingRight ? (player.x + 22) : (player.x + 10);
-                let handY = player.y + 4; 
-                
-                if (checkCollision(handX, handY) && !checkCollision(handX, handY - TILE_SIZE)) {
-                    player.state = "HANGING";
-                    player.velX = 0;
-                    player.velY = 0;
-                    
-                    let targetTileX = Math.floor(handX / TILE_SIZE);
-                    player.x = player.facingRight ? (targetTileX * TILE_SIZE - 20) : (targetTileX * TILE_SIZE + TILE_SIZE - 12);
-                    player.y = Math.floor(handY / TILE_SIZE) * TILE_SIZE;
-                }
-            }
-
-            if (checkCollision(player.x + 12, player.y + 32) || checkCollision(player.x + 20, player.y + 32)) { 
-                player.y = Math.floor(player.y / TILE_SIZE) * TILE_SIZE;
-                player.velY = 0;
-                
-                // Hazard logic check loop execution
