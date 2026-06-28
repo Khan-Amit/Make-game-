@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>MakeGame Mobile Engine</title>
+    <style>
+        body { margin: 0; background: #222; color: #fff; font-family: sans-serif; text-align: center; touch-action: manipulation; }
+        canvas { background: #111; display: block; margin: 10px auto; border: 2px solid #444; max-width: 95vw; max-height: 50vh; }
+        .controls { display: flex; justify-content: center; gap: 10px; margin-top: 5px; }
+        button { padding: 12px 20px; font-weight: bold; background: #444; color: white; border: none; border-radius: 5px; }
+        button:active { background: #666; }
+        .dpad { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(2, 60px); gap: 10px; justify-content: center; margin-top: 15px; }
+        .dbtn { background: #ff5722; border-radius: 50%; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    </style>
+</head>
+<body>
+
+    <h3>📱 MakeGame Engine Mobile Workspace</h3>
+    <canvas id="gameCanvas" width="480" height="320"></canvas>
+
+    <div class="controls">
+        <button onclick="toggleMode()">Mode: <span id="modeText">Edit Grid</span></button>
+        <button onclick="exportStandalone()" style="background:#4CAF50;">Export Standalone App</button>
+    </div>
+
+    <!-- On-screen mobile touch D-Pad for Prince of Persia movement -->
+    <div class="dpad">
+        <div class="dbtn" ontouchstart="movePlayer('LEFT')" ontouchend="stopPlayer()">◀</div>
+        <div class="dbtn" ontouchstart="movePlayer('JUMP')">▲</div>
+        <div class="dbtn" ontouchstart="movePlayer('RIGHT')" ontouchend="stopPlayer()">▶</div>
+        <div></div>
+        <div class="dbtn" ontouchstart="movePlayer('CROUCH')" ontouchend="stopPlayer()" style="grid-column: 2;">▼</div>
+    </div>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+const TILE_SIZE = 32;
+const COLS = 15;
+const ROWS = 10;
+let editMode = true; // Start in Editor mode
+
+// 1. In-House Grid Layout Matrix (0 = Empty, 1 = Floor Block)
+let tileMap = Array(COLS * ROWS).fill(0);
+// Build a default base platform floor
+for(let x=0; x<COLS; x++) tileMap[(ROWS-1)*COLS + x] = 1; 
+
+// 2. Rigid Human Structure Model
+let player = {
+    x: 64, y: 64,
+    velX: 0, velY: 0,
+    state: "IDLE", // IDLE, RUNNING, LEAPING
+    facingRight: true
+};
+
+// Toggle between Level Editor mode and Play Testing mode
+function toggleMode() {
+    editMode = !editMode;
+    document.getElementById("modeText").innerText = editMode ? "Edit Grid" : "Play Test";
+    if(!editMode) { // Reset player position when entering play mode
+        player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
+    }
+}
+
+// Touch grid handler for designing layout on phone screen
+canvas.addEventListener("touchstart", function(e) {
+    if (!editMode) return;
+    const rect = canvas.getBoundingClientRect();
+    const touch = e.touches[0];
+    const clickX = ((touch.clientX - rect.left) / rect.width) * canvas.width;
+    const clickY = ((touch.clientY - rect.top) / rect.height) * canvas.height;
+    
+    int tileX = Math.floor(clickX / TILE_SIZE);
+    int tileY = Math.floor(clickY / TILE_SIZE);
+    
+    if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
+        int idx = tileY * COLS + tileX;
+        tileMap[idx] = tileMap[idx] === 0 ? 1 : 0; // Toggle block layout
+    }
+});
+
+// 3. Mobile Input Routing Matrix
+function movePlayer(dir) {
+    if (editMode) return;
+    if (dir === "LEFT") { player.velX = -3; player.facingRight = false; player.state = "RUNNING"; }
+    if (dir === "RIGHT") { player.velX = 3; player.facingRight = true; player.state = "RUNNING"; }
+    if (dir === "JUMP" && player.state !== "LEAPING") { player.velY = -8; player.state = "LEAPING"; }
+}
+function stopPlayer() {
+    if (editMode) return;
+    player.velX = 0;
+    if (player.state === "RUNNING") player.state = "IDLE";
+}
+
+function checkCollision(x, y) {
+    int tX = Math.floor(x / TILE_SIZE);
+    int tY = Math.floor(y / TILE_SIZE);
+    if (tX < 0 || tX >= COLS || tY < 0 || tY >= ROWS) return true;
+    return tileMap[tY * COLS + tX] === 1;
+}
+
+// Engine core update/render frame processing loop
+function gameLoop() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw Map Grid blocks
+    for(let y=0; y<ROWS; y++) {
+        for(let x=0; x<COLS; x++) {
+            if(tileMap[y*COLS + x] === 1) {
+                ctx.fillStyle = "#795548"; // Floor Block color
+                ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                ctx.strokeStyle = "#5d4037";
+                ctx.strokeRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+    }
+
+    // Engine Physics Logic Process
+    if (!editMode) {
+        player.velY += 0.4; // Apply constant gravity element
+        
+        // Horizontal check
+        player.x += player.velX;
+        if(checkCollision(player.x + 8, player.y + 16) || checkCollision(player.x + 24, player.y + 16)) {
+            player.x -= player.velX;
+        }
+
+        // Vertical check
+        player.y += player.velY;
+        if (checkCollision(player.x + 16, player.y + 32)) { // Landed on floor
+            player.y = Math.floor(player.y / TILE_SIZE) * TILE_SIZE;
+            player.velY = 0;
+            if(player.state === "LEAPING") player.state = "IDLE";
+        }
+    }
+
+    // Draw Player Body Hitbox (Prince of Persia style vector character)
+    ctx.fillStyle = editMode ? "#ffeb3b" : "#00bcd4";
+    ctx.fillRect(player.x + 8, player.y, 16, 32); // Draw skeletal hitbox body
+
+    requestAnimationFrame(gameLoop);
+}
+
+// 4. Standalone Code Injection Exporter
+function exportStandalone() {
+    const serializedMap = JSON.stringify(tileMap);
+    const standaloneCode = document.documentElement.outerHTML.replace(
+        /let tileMap = Array.*/, 
+        `let tileMap = ${serializedMap}; editMode = false; document.querySelector('.controls').style.display='none';`
+    );
+    
+    const blob = new Blob([standaloneCode], {type: "text/html"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "MyStandalonePlatformer.html";
+    a.click();
+    alert("🚀 Standalone App Package downloaded directly to your phone!");
+}
+
+gameLoop();
+</script>
+</body>
+</html>
