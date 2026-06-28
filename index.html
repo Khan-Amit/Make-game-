@@ -43,6 +43,33 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
         button:active { background: #444456; }
+        
+        /* CHARACTER CREATOR OVERLAY SCREEN PANELS */
+        .creator-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(15,15,20,0.95);
+            z-index: 999;
+            overflow-y: auto;
+            padding-bottom: 30px;
+        }
+        .creator-title { font-size: 1.2rem; margin: 20px 0; font-weight: bold; color: #ffeb3b; }
+        .config-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #2a2a36;
+            margin: 8px auto;
+            padding: 10px 14px;
+            width: 85vw;
+            border-radius: 8px;
+            border: 1px solid #3d3d52;
+        }
+        .config-label { font-size: 0.85rem; font-weight: bold; color: #cfd8dc; }
+        .config-value { font-size: 0.85rem; font-weight: bold; color: #00e5ff; min-width: 80px; text-align: center; }
+        .arrow-btn { background: #e65100; border: 1px solid #ffb74d; color: white; padding: 6px 12px; font-size: 0.9rem; }
+
         .dpad { 
             display: grid; 
             grid-template-columns: repeat(3, 70px); 
@@ -72,25 +99,62 @@
     <h3>📱 MakeGame Engine Mobile Core Layout</h3>
     <canvas id="gameCanvas" width="480" height="320"></canvas>
 
-    <!-- UI Matrix featuring explicit EDIT, RUN, COMPILE, and EXPORT buttons -->
     <div class="controls">
+        <button id="createModeBtn" onclick="openCreatorPage()" style="background:#6a1b9a; border-color:#8e24aa;">CREATE</button>
         <button id="editBtn" onclick="setEngineMode('EDIT')" style="background:#fbc02d; color:#000; border-color:#fdd835;">EDIT</button>
         <button id="runBtn" onclick="setEngineMode('RUN')" style="background:#2d2d3a; color:#fff;">RUN</button>
         <button id="compileBtn" onclick="compileProjectInMemory()" style="background:#0288d1; border-color:#29b6f6;">COMPILE</button>
         <button id="exportBtn" onclick="exportStandaloneFile()" style="background:#2e7d32; border-color:#81c784;">EXPORT</button>
-        
         <button id="roomBtn">ROOM: <span id="roomText" style="color:#00e5ff;">0</span></button>
-        <button id="heroBtn" onclick="cycleCharacter()">HERO: <span id="heroText" style="color:#00e5ff;">Prince</span></button>
         <button id="toolBtn" onclick="toggleTool()" style="background:#5c5c7a; grid-column: span 3;">TOOL: <span style="color:#ff9100;">Floor</span></button>
     </div>
 
-    <!-- On-screen mobile touch D-Pad matrix interface -->
+    <!-- TOUCH DPAD INTERFACE -->
     <div class="dpad">
         <div class="dbtn" ontouchstart="movePlayer('LEFT')" ontouchend="stopPlayer()">◀</div>
         <div class="dbtn" ontouchstart="movePlayer('JUMP')">▲</div>
         <div class="dbtn" ontouchstart="movePlayer('RIGHT')" ontouchend="stopPlayer()">▶</div>
         <div></div>
         <div class="dbtn" ontouchstart="movePlayer('CROUCH')" ontouchend="stopPlayer()" style="grid-column: 2;">▼</div>
+    </div>
+
+    <!-- --- PHASE: CHARACTER CREATION CONFIGURATION PAGE --- -->
+    <div id="creatorPage" class="creator-overlay">
+        <div class="creator-title">⚔️ Character Creation Panel</div>
+        
+        <!-- Character Class Setup -->
+        <div class="config-row">
+            <span class="config-label">CHARACTER:</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('char', -1)">◀</button>
+            <span id="cValChar" class="config-value">Prince</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('char', 1)">▶</button>
+        </div>
+
+        <!-- 6 Time Age Formats Setup -->
+        <div class="config-row">
+            <span class="config-label">TIME AGE:</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('age', -1)">◀</button>
+            <span id="cValAge" class="config-value" style="color:#ff9100;">Modern</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('age', 1)">▶</button>
+        </div>
+
+        <!-- 9 Custom Weapons Settings -->
+        <div class="config-row">
+            <span class="config-label">WEAPON TYPE:</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('weapon', -1)">◀</button>
+            <span id="cValWeapon" class="config-value" style="color:#ffd600;">None</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('weapon', 1)">▶</button>
+        </div>
+
+        <!-- 9 Custom Dress Variations Setup -->
+        <div class="config-row">
+            <span class="config-label">DRESS MODULE:</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('dress', -1)">◀</button>
+            <span id="cValDress" class="config-value" style="color:#a7ffeb;">Tunic</span>
+            <button class="arrow-btn" onclick="offsetCreatorProp('dress', 1)">▶</button>
+        </div>
+
+        <button onclick="closeCreatorPage()" style="background:#2e7d32; border-color:#81c784; padding:14px 40px; margin-top:20px; font-size:1rem;">APPLY & CLOSE</button>
     </div>
 
 <script>
@@ -104,47 +168,50 @@ const SCREEN_SIZE = COLS * ROWS;
 const TOTAL_ROOMS = 3; 
 
 let editMode = true; 
-let currentTool = 1; // 1 = Floor, 2 = Spikes, 3 = Guard, 4 = Key, 5 = Lock Gate
+let currentTool = 1; // 1=Floor, 2=Spikes, 3=Guard, 4=Key, 5=Gate
 const DEATH_TIMER_MAX = 45; 
 let currentRoom = 0; 
 let projectIsCompiled = false;
 
-// CHARACTER SELECTION SKIN MATRIX DATA
+// ENGINE SYSTEM DATA PROPERTIES
 const CHARACTERS = [
     { name: "Prince",   color: "#00e5ff", speed: 3.0, jumpForce: -7.5 },
     { name: "Assassin", color: "#ff1744", speed: 3.8, jumpForce: -7.0 },
     { name: "Knight",   color: "#ffd600", speed: 2.2, jumpForce: -8.8 }
 ];
-let selectedCharIndex = 0; 
+let selectedCharIndex = 0;
+
+// 6 Time Age Formats Matrix
+const TIME_AGES = ["Funny", "Modern", "Girls", "40s", "Medieval", "Ancients"];
+let selectedAgeIndex = 1; // Default to Modern
+
+// 9 Weapon Variation Definitions
+const WEAPONS = ["None", "Dagger", "Scimitar", "Broadsword", "Halberd", "Crossbow", "Blunderbuss", "Katana", "Scythe"];
+let selectedWeaponIndex = 0;
+
+// 9 Dress Variation Definitions
+const DRESSES = ["Tunic", "Armor", "Robe", "Cloak", "Uniform", "Leather", "Gown", "Gi", "Rags"];
+let selectedDressIndex = 0;
 
 // Setup Multi-Screen Space Arrays
 let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); 
 
-// Active mutable session instances for testing/building
+// Active mutable session instances
 let activeGuards = [];
 let runtimeItemMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let inventoryHasKey = false; 
 
 // IN-HOUSE AUDIO SYNTHESIZER ENGINE
 let audioCtx = null;
-
-function initAudio() {
-    if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
-}
+function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
 
 function playSound(type) {
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-
-    let osc = audioCtx.createOscillator();
-    let gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    let now = audioCtx.currentTime;
+    let osc = audioCtx.createOscillator(); let gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination); let now = audioCtx.currentTime;
 
     if (type === "jump") {
         osc.type = "square"; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(600, now + 0.15);
@@ -159,89 +226,3 @@ function playSound(type) {
         gain.gain.setValueAtTime(0.25, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
         osc.start(now); osc.stop(now + 0.25);
     } else if (type === "hurt") {
-        osc.type = "sawtooth"; osc.frequency.setValueAtTime(120, now); osc.frequency.linearRampToValueAtTime(80, now + 0.15);
-        gain.gain.setValueAtTime(0.25, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
-        osc.start(now); osc.stop(now + 0.15);
-    } else if (type === "death") {
-        osc.type = "sawtooth"; osc.frequency.setValueAtTime(180, now); osc.frequency.linearRampToValueAtTime(40, now + 0.45);
-        gain.gain.setValueAtTime(0.3, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.45);
-        osc.start(now); osc.stop(now + 0.45);
-    } else if (type === "climb") {
-        osc.type = "square"; osc.frequency.setValueAtTime(200, now); osc.frequency.setValueAtTime(250, now + 0.06); osc.frequency.setValueAtTime(300, now + 0.12);
-        gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.18);
-        osc.start(now); osc.stop(now + 0.18);
-    } else if (type === "compile") {
-        osc.type = "sine"; osc.frequency.setValueAtTime(440, now); osc.frequency.setValueAtTime(880, now + 0.1);
-        gain.gain.setValueAtTime(0.15, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
-        osc.start(now); osc.stop(now + 0.2);
-    }
-}
-
-// Generate base platforms across all rooms
-for (let r = 0; r < TOTAL_ROOMS; r++) {
-    for (let x = 0; x < COLS; x++) {
-        multiTileMap[r][(ROWS - 1) * COLS + x] = 1; 
-    }
-}
-
-// Rigid Human Structure State Machine Configuration
-let player = {
-    x: 64, y: 64,
-    velX: 0, velY: 0,
-    state: "IDLE", 
-    facingRight: true,
-    animFrame: 0,
-    hearts: 3,
-    invincibleTimer: 0
-};
-
-function setEngineMode(targetMode) {
-    initAudio();
-    const editBtn = document.getElementById("editBtn");
-    const runBtn = document.getElementById("runBtn");
-
-    if (targetMode === "EDIT") {
-        editMode = true;
-        editBtn.style.background = "#fbc02d"; editBtn.style.color = "#000"; editBtn.style.borderColor = "#fdd835";
-        runBtn.style.background = "#2d2d3a"; runBtn.style.color = "#fff"; runBtn.style.borderColor = "#4a4a5a";
-        activeGuards = [];
-    } else if (targetMode === "RUN") {
-        if(!projectIsCompiled) {
-            alert("⚠️ Warning: Project layout has not been COMPILED yet! Compiling automatically now.");
-            compileProjectInMemory();
-        }
-        editMode = false;
-        runBtn.style.background = "#00e676"; runBtn.style.color = "#000"; runBtn.style.borderColor = "#69f0ae";
-        editBtn.style.background = "#2d2d3a"; editBtn.style.color = "#fff"; editBtn.style.borderColor = "#4a4a5a";
-        resetGameSession();
-    }
-}
-
-// --- COMPILE BUTTON FUNCTIONALITY ---
-function compileProjectInMemory() {
-    initAudio();
-    projectIsCompiled = true;
-    playSound("compile");
-    
-    // Lock asset arrays snapshot into runtime variables
-    for (let r = 0; r < TOTAL_ROOMS; r++) {
-        for (let i = 0; i < SCREEN_SIZE; i++) {
-            runtimeItemMap[r][i] = itemSpawnMap[r][i];
-        }
-    }
-    
-    // Flash compiler button text briefly to show completion status
-    const compBtn = document.getElementById("compileBtn");
-    const origBg = compBtn.style.background;
-    compBtn.style.background = "#fff"; compBtn.style.color = "#000";
-    setTimeout(() => {
-        compBtn.style.background = origBg; compBtn.style.color = "#fff";
-    }, 150);
-}
-
-// --- EXPORT BUTTON FUNCTIONALITY ---
-function exportStandaloneFile() {
-    initAudio();
-    if(!projectIsCompiled) {
-        compileProjectInMemory();
-    }
