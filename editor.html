@@ -75,6 +75,7 @@
 
     <div class="controls">
         <button onclick="toggleMode()">MODE: <span id="modeText" style="color:#ffeb3b;">Edit Grid</span></button>
+        <button id="toolBtn" onclick="toggleTool()" style="background:#5c5c7a;">TOOL: <span style="color:#ff9100;">Floor</span></button>
         <button onclick="exportStandalone()" style="background:#2e7d32; border-color:#81c784;">Build App File</button>
     </div>
 
@@ -95,8 +96,10 @@ const TILE_SIZE = 32;
 const COLS = 15;
 const ROWS = 10;
 let editMode = true; 
+let currentTool = 1; // 1 = Floor Block, 2 = Lethal Spikes
+const DEATH_TIMER_MAX = 45; 
 
-// Base grid architecture: 0 = air, 1 = solid floor
+// Base grid architecture: 0 = air, 1 = solid floor, 2 = spikes
 let tileMap = Array(COLS * ROWS).fill(0);
 for(let x = 0; x < COLS; x++) {
     tileMap[(ROWS - 1) * COLS + x] = 1; 
@@ -129,6 +132,13 @@ function toggleMode() {
     }
 }
 
+function toggleTool() {
+    currentTool = currentTool === 1 ? 2 : 1;
+    document.getElementById("toolBtn").innerHTML = currentTool === 1 ? 
+        'TOOL: <span style="color:#ff9100;">Floor</span>' : 
+        'TOOL: <span style="color:#ff1744;">Spikes</span>';
+}
+
 // Handle touch coordinate tracking directly across scale bounds
 function handleCanvasTouch(e) {
     if (!editMode) return;
@@ -143,7 +153,7 @@ function handleCanvasTouch(e) {
     
     if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
         const idx = tileY * COLS + tileX;
-        tileMap[idx] = tileMap[idx] === 0 ? 1 : 0; 
+        tileMap[idx] = tileMap[idx] === currentTool ? 0 : currentTool; 
     }
 }
 
@@ -153,12 +163,12 @@ function checkCollision(x, y) {
     const tX = Math.floor(x / TILE_SIZE);
     const tY = Math.floor(y / TILE_SIZE);
     if (tX < 0 || tX >= COLS || tY < 0 || tY >= ROWS) return true;
-    return tileMap[tY * COLS + tX] === 1;
+    return tileMap[tY * COLS + tX] === 1; // Only tile type 1 blocks horizontal/vertical passage
 }
 
 // Mobile runtime input router matching standard movement engine requirements
 function movePlayer(dir) {
-    if (editMode) return;
+    if (editMode || player.state === "DEAD") return;
     
     // Rigid ledge actions override default translation calls
     if (player.state === "HANGING") {
@@ -181,7 +191,7 @@ function movePlayer(dir) {
 }
 
 function stopPlayer() {
-    if (editMode || player.state === "HANGING" || player.state === "CLIMBING") return;
+    if (editMode || player.state === "HANGING" || player.state === "CLIMBING" || player.state === "DEAD") return;
     player.velX = 0;
     if (player.state === "RUNNING") player.state = "IDLE";
 }
@@ -192,11 +202,23 @@ function gameLoop() {
     // Rasterize platform data configurations onto view panel
     for(let y = 0; y < ROWS; y++) {
         for(let x = 0; x < COLS; x++) {
-            if(tileMap[y * COLS + x] === 1) {
+            const tile = tileMap[y * COLS + x];
+            if(tile === 1) {
                 ctx.fillStyle = "#4e342e"; 
                 ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
                 ctx.strokeStyle = "#3e2723";
                 ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            } else if(tile === 2) {
+                ctx.fillStyle = "#ff1744"; 
+                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 24, TILE_SIZE, 8);
+                ctx.beginPath();
+                for(let i = 0; i < 3; i++) {
+                    let startX = x * TILE_SIZE + (i * 10) + 2;
+                    ctx.moveTo(startX, y * TILE_SIZE + 24);
+                    ctx.lineTo(startX + 4, y * TILE_SIZE + 8);
+                    ctx.lineTo(startX + 8, y * TILE_SIZE + 24);
+                }
+                ctx.fill();
             } else {
                 ctx.strokeStyle = "rgba(255,255,255,0.03)";
                 ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -206,7 +228,12 @@ function gameLoop() {
 
     // Engine framework step routing evaluations
     if (!editMode) {
-        if (player.state !== "HANGING" && player.state !== "CLIMBING") {
+        if (player.state === "DEAD") {
+            player.animFrame--;
+            if (player.animFrame <= 0) { 
+                player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
+            }
+        } else if (player.state !== "HANGING" && player.state !== "CLIMBING") {
             player.velY += 0.38; // System gravity acceleration constants
             
             player.x += player.velX;
@@ -236,42 +263,5 @@ function gameLoop() {
             if (checkCollision(player.x + 12, player.y + 32) || checkCollision(player.x + 20, player.y + 32)) { 
                 player.y = Math.floor(player.y / TILE_SIZE) * TILE_SIZE;
                 player.velY = 0;
-                if(player.state === "LEAPING") player.state = "IDLE";
-            } else if (player.state === "IDLE" || player.state === "RUNNING") {
-                player.state = "LEAPING";
-            }
-        } else if (player.state === "CLIMBING") {
-            player.animFrame++;
-            player.y -= 2; 
-            
-            if (player.animFrame >= 16) { 
-                player.y = player.y - 4;
-                player.x += player.facingRight ? 18 : -18;
-                player.state = "IDLE";
-                player.animFrame = 0;
-            }
-        }
-    }
-
-    // Set layout fill color profiles based on structural movement flags
-    if (editMode) ctx.fillStyle = "#ffeb3b";
-    else if (player.state === "HANGING") ctx.fillStyle = "#e91e63";
-    else if (player.state === "CLIMBING") ctx.fillStyle = "#00e676";
-    else if (player.state === "LEAPING") ctx.fillStyle = "#ff9100";
-    else ctx.fillStyle = "#00e5ff";
-
-    // Draw active structural model body elements
-    ctx.fillRect(player.x + 8, player.y, 16, 32);
-
-    requestAnimationFrame(gameLoop);
-}
-
-// In-House standalone template serializer system block
-function exportStandalone() {
-    const serializedMap = JSON.stringify(tileMap);
-    const standaloneCode = document.documentElement.outerHTML.replace(
-        /let tileMap = Array.*/, 
-        `let tileMap = ${serializedMap}; editMode = false; document.querySelector('.controls').style.display='none';`
-    );
-    
-    const blob = new Blob([standaloneCode], {type: "text/html"});
+                
+                // Hazard logic check loop execution
