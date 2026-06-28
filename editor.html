@@ -28,14 +28,14 @@
         .controls { 
             display: flex; 
             justify-content: center; 
-            gap: 8px; 
+            gap: 6px; 
             margin: 8px auto;
             width: 95vw;
         }
         button { 
             flex: 1;
-            padding: 12px 6px; 
-            font-size: 0.8rem;
+            padding: 12px 4px; 
+            font-size: 0.75rem;
             font-weight: bold; 
             background: #2d2d3a; 
             color: #fff; 
@@ -100,12 +100,16 @@ const SCREEN_SIZE = COLS * ROWS;
 const TOTAL_ROOMS = 3; 
 
 let editMode = true; 
-let currentTool = 1; // 1 = Floor Block, 2 = Lethal Spikes
+let currentTool = 1; // 1 = Floor, 2 = Spikes, 3 = Guard
 const DEATH_TIMER_MAX = 45; 
 let currentRoom = 0; 
 
-// Setup Multi-Screen Space Array
+// Setup Multi-Screen Space Arrays
 let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
+let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
+
+// Runtime list of active instanced guards
+let activeGuards = [];
 
 // Generate base platforms across all rooms
 for (let r = 0; r < TOTAL_ROOMS; r++) {
@@ -123,12 +127,33 @@ let player = {
     animFrame: 0
 };
 
+function initGuardsForRoom() {
+    activeGuards = [];
+    if (editMode) return; // Only process running instances in play test mode
+    
+    let currentGuardsData = guardSpawnMap[currentRoom];
+    for (let i = 0; i < SCREEN_SIZE; i++) {
+        if (currentGuardsData[i] === 1) {
+            let tx = i % COLS;
+            let ty = Math.floor(i / COLS);
+            activeGuards.push({
+                x: tx * TILE_SIZE,
+                y: ty * TILE_SIZE,
+                startX: tx * TILE_SIZE,
+                facingRight: false,
+                speed: 1.2
+            });
+        }
+    }
+}
+
 function toggleMode() {
     editMode = !editMode;
     const modeText = document.getElementById("modeText");
     if (editMode) {
         modeText.innerText = "Edit Grid";
         modeText.style.color = "#ffeb3b";
+        activeGuards = [];
     } else {
         modeText.innerText = "Play Test";
         modeText.style.color = "#00e676";
@@ -139,14 +164,18 @@ function toggleMode() {
         player.velX = 0; 
         player.velY = 0; 
         player.state = "IDLE";
+        initGuardsForRoom();
     }
 }
 
 function toggleTool() {
-    currentTool = currentTool === 1 ? 2 : 1;
-    document.getElementById("toolBtn").innerHTML = currentTool === 1 ? 
-        'TOOL: <span style="color:#ff9100;">Floor</span>' : 
-        'TOOL: <span style="color:#ff1744;">Spikes</span>';
+    currentTool++;
+    if (currentTool > 3) currentTool = 1;
+    
+    const toolBtn = document.getElementById("toolBtn");
+    if (currentTool === 1) toolBtn.innerHTML = 'TOOL: <span style="color:#ff9100;">Floor</span>';
+    else if (currentTool === 2) toolBtn.innerHTML = 'TOOL: <span style="color:#ff1744;">Spikes</span>';
+    else if (currentTool === 3) toolBtn.innerHTML = 'TOOL: <span style="color:#b388ff;">Guard</span>';
 }
 
 document.getElementById("roomBtn").addEventListener("click", function() {
@@ -168,7 +197,16 @@ function handleCanvasTouch(e) {
     
     if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
         const idx = tileY * COLS + tileX;
-        multiTileMap[currentRoom][idx] = multiTileMap[currentRoom][idx] === currentTool ? 0 : currentTool; 
+        
+        if (currentTool === 3) {
+            // Toggle guard spawn flag inside this map index slot
+            guardSpawnMap[currentRoom][idx] = guardSpawnMap[currentRoom][idx] === 1 ? 0 : 1;
+            multiTileMap[currentRoom][idx] = 0; // Guard spot can't be a solid wall block simultaneously
+        } else {
+            // Paint map blocks or spikes and clear previous guard traces at that exact slot index
+            guardSpawnMap[currentRoom][idx] = 0;
+            multiTileMap[currentRoom][idx] = multiTileMap[currentRoom][idx] === currentTool ? 0 : currentTool; 
+        }
     }
 }
 
@@ -211,6 +249,12 @@ function stopPlayer() {
     if (player.state === "RUNNING") player.state = "IDLE";
 }
 
+function triggerPlayerDeath() {
+    player.state = "DEAD";
+    player.velX = 0;
+    player.animFrame = DEATH_TIMER_MAX; 
+}
+
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     document.getElementById("roomText").innerText = currentRoom;
@@ -238,46 +282,3 @@ function gameLoop() {
                 }
                 ctx.fill();
             } else {
-                ctx.strokeStyle = "rgba(255,255,255,0.03)";
-                ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            }
-        }
-    }
-
-    // 2. Physics logic tracking computations
-    if (!editMode) {
-        if (player.state === "DEAD") {
-            player.animFrame--;
-            if (player.animFrame <= 0) { 
-                currentRoom = 0;
-                player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
-            }
-        } else if (player.state !== "HANGING" && player.state !== "CLIMBING") {
-            player.velY += 0.38; 
-            
-            player.x += player.velX;
-
-            // Multi-Room Edge Trigger Evaluation Blocks
-            if (player.x > canvas.width - 12) { 
-                if (currentRoom < TOTAL_ROOMS - 1) {
-                    currentRoom++;
-                    player.x = 4; 
-                } else {
-                    player.x = canvas.width - 12; 
-                }
-            } else if (player.x < -4) { 
-                if (currentRoom > 0) {
-                    currentRoom--;
-                    player.x = canvas.width - 20; 
-                } else {
-                    player.x = -4; 
-                }
-            }
-
-            if(checkCollision(player.x + 8, player.y + 4) || checkCollision(player.x + 24, player.y + 4) ||
-               checkCollision(player.x + 8, player.y + 28) || checkCollision(player.x + 24, player.y + 28)) {
-                player.x -= player.velX;
-            }
-
-            player.y += player.velY;
-            
