@@ -188,21 +188,20 @@ let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fi
 let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); 
 
-// Preload layout bounds
+// Preload solid ground floors across all layouts
 for (let r = 0; r < TOTAL_ROOMS; r++) {
     for (let x = 0; x < COLS; x++) {
         multiTileMap[r][(ROWS - 1) * COLS + x] = 1; 
     }
 }
-multiTileMap[7 * COLS + 4] = 1;
-multiTileMap[7 * COLS + 5] = 1;
-multiTileMap[7 * COLS + 6] = 1;
+// Room 0 Challenges setup
+multiTileMap[7 * COLS + 4] = 1; multiTileMap[7 * COLS + 5] = 1; multiTileMap[7 * COLS + 6] = 1;
 multiTileMap[(ROWS - 1) * COLS + 9] = 2; 
 guardSpawnMap[8 * COLS + 5] = 1;        
 
+// Room 1 Challenges setup
 itemSpawnMap[5 * COLS + 4] = 4;          
-multiTileMap[7 * COLS + 10] = 1;
-multiTileMap[6 * COLS + 10] = 1;
+multiTileMap[7 * COLS + 10] = 1; multiTileMap[6 * COLS + 10] = 1;
 itemSpawnMap[8 * COLS + 10] = 5;         
 
 let activeGuards = [];
