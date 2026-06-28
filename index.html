@@ -44,7 +44,6 @@
         }
         button:active { background: #444456; }
         
-        /* CHARACTER CREATOR OVERLAY SCREEN PANELS */
         .creator-overlay {
             display: none;
             position: fixed;
@@ -68,7 +67,7 @@
         }
         .config-label { font-size: 0.85rem; font-weight: bold; color: #cfd8dc; }
         .config-value { font-size: 0.85rem; font-weight: bold; color: #00e5ff; min-width: 80px; text-align: center; }
-        .arrow-btn { background: #e65100; border: 1px solid #ffb74d; color: white; padding: 6px 12px; font-size: 0.9rem; }
+        .arrow-btn { background: #e65100; border: 1px solid #ffb74d; color: white; padding: 6px 12px; font-size: 0.9rem; border-radius: 4px; }
 
         .dpad { 
             display: grid; 
@@ -105,7 +104,7 @@
         <button id="runBtn" onclick="setEngineMode('RUN')" style="background:#2d2d3a; color:#fff;">RUN</button>
         <button id="compileBtn" onclick="compileProjectInMemory()" style="background:#0288d1; border-color:#29b6f6;">COMPILE</button>
         <button id="exportBtn" onclick="exportStandaloneFile()" style="background:#2e7d32; border-color:#81c784;">EXPORT</button>
-        <button id="roomBtn">ROOM: <span id="roomText" style="color:#00e5ff;">0</span></button>
+        <button id="roomBtn" onclick="cycleRoomsManual()">ROOM: <span id="roomText" style="color:#00e5ff;">0</span></button>
         <button id="toolBtn" onclick="toggleTool()" style="background:#5c5c7a; grid-column: span 3;">TOOL: <span style="color:#ff9100;">Floor</span></button>
     </div>
 
@@ -185,36 +184,31 @@ let selectedWeaponIndex = 0;
 const DRESSES = ["Tunic", "Armor", "Robe", "Cloak", "Uniform", "Leather", "Gown", "Gi", "Rags"];
 let selectedDressIndex = 0;
 
-// Setup Map Data Matrices
 let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); 
 
-// --- FIXED PRE-LOADED DEMO ENVIRONMENT MAP DESIGN ---
-// Generate floor layouts across all three template screens
+// Preload layout bounds
 for (let r = 0; r < TOTAL_ROOMS; r++) {
     for (let x = 0; x < COLS; x++) {
-        multiTileMap[r][(ROWS - 1) * COLS + x] = 1; // Solid Floor line
+        multiTileMap[r][(ROWS - 1) * COLS + x] = 1; 
     }
 }
-// Room 0: Add obstacle platforms and spikes pit challenge
 multiTileMap[0][7 * COLS + 4] = 1;
 multiTileMap[0][7 * COLS + 5] = 1;
 multiTileMap[0][7 * COLS + 6] = 1;
-multiTileMap[0][(ROWS - 1) * COLS + 9] = 2; // Spikes hazard trap!
-guardSpawnMap[0][8 * COLS + 5] = 1;        // Guard pacing right over here
+multiTileMap[0][(ROWS - 1) * COLS + 9] = 2; 
+guardSpawnMap[0][8 * COLS + 5] = 1;        
 
-// Room 1: Key placement & Wall Door lock obstacle setup
-itemSpawnMap[1][5 * COLS + 4] = 4;          // Yellow Key collectible object
+itemSpawnMap[1][5 * COLS + 4] = 4;          
 multiTileMap[1][7 * COLS + 10] = 1;
 multiTileMap[1][6 * COLS + 10] = 1;
-itemSpawnMap[1][8 * COLS + 10] = 5;         // Security locking wall gate obstacle
+itemSpawnMap[1][8 * COLS + 10] = 5;         
 
 let activeGuards = [];
 let runtimeItemMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let inventoryHasKey = false; 
 
-// AUDIO ROUTINES
 let audioCtx = null;
 function initAudio() { if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
 function playSound(type) {
@@ -227,3 +221,7 @@ function playSound(type) {
     } else if (type === "key") {
         osc.type = "sine"; osc.frequency.setValueAtTime(523.25, now); osc.frequency.setValueAtTime(659.25, now + 0.08);
         gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.2); osc.start(now); osc.stop(now + 0.2);
+    } else if (type === "gate") {
+        osc.type = "triangle"; osc.frequency.setValueAtTime(300, now); osc.frequency.linearRampToValueAtTime(100, now + 0.25);
+        gain.gain.setValueAtTime(0.25, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.25); osc.start(now); osc.stop(now + 0.25);
+    } else if (type === "hurt") {
