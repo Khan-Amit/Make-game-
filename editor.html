@@ -26,14 +26,13 @@
             box-shadow: 0 8px 20px rgba(0,0,0,0.5);
         }
         .controls { 
-            display: flex; 
-            justify-content: center; 
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
             gap: 6px; 
             margin: 8px auto;
             width: 95vw;
         }
         button { 
-            flex: 1;
             padding: 12px 4px; 
             font-size: 0.72rem;
             font-weight: bold; 
@@ -76,8 +75,9 @@
     <div class="controls">
         <button onclick="toggleMode()">MODE: <span id="modeText" style="color:#ffeb3b;">Edit Grid</span></button>
         <button id="roomBtn">ROOM: <span id="roomText" style="color:#00e5ff;">0</span></button>
+        <button id="heroBtn" onclick="cycleCharacter()">HERO: <span id="heroText" style="color:#00e5ff;">Prince</span></button>
         <button id="toolBtn" onclick="toggleTool()" style="background:#5c5c7a;">TOOL: <span style="color:#ff9100;">Floor</span></button>
-        <button onclick="exportStandalone()" style="background:#2e7d32; border-color:#81c784;">Build App File</button>
+        <button onclick="exportStandalone()" style="background:#2e7d32; border-color:#81c784; grid-column: span 2;">Build App File</button>
     </div>
 
     <!-- On-screen mobile touch D-Pad matrix interface -->
@@ -104,10 +104,18 @@ let currentTool = 1; // 1 = Floor, 2 = Spikes, 3 = Guard, 4 = Key, 5 = Lock Gate
 const DEATH_TIMER_MAX = 45; 
 let currentRoom = 0; 
 
+// --- CHARACTER SELECTION SKIN MATRIX DATA ---
+const CHARACTERS = [
+    { name: "Prince",   color: "#00e5ff", speed: 3.0, jumpForce: -7.5 },
+    { name: "Assassin", color: "#ff1744", speed: 3.8, jumpForce: -7.0 },
+    { name: "Knight",   color: "#ffd600", speed: 2.2, jumpForce: -8.8 }
+];
+let selectedCharIndex = 0; // Starts with classic Prince configuration
+
 // Setup Multi-Screen Space Arrays
 let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
-let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); // 4 = Key, 5 = Locked Gate
+let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); 
 
 // Active mutable session instances for testing/building
 let activeGuards = [];
@@ -130,11 +138,18 @@ let player = {
     animFrame: 0
 };
 
+function cycleCharacter() {
+    if (!editMode) return; // Only switch characters while designing
+    selectedCharIndex = (selectedCharIndex + 1) % CHARACTERS.length;
+    const heroText = document.getElementById("heroText");
+    heroText.innerText = CHARACTERS[selectedCharIndex].name;
+    heroText.style.color = CHARACTERS[selectedCharIndex].color;
+}
+
 function initRoomEntities() {
     activeGuards = [];
     if (editMode) return;
     
-    // Instantiate enemy guards for this specific scene
     let currentGuardsData = guardSpawnMap[currentRoom];
     for (let i = 0; i < SCREEN_SIZE; i++) {
         if (currentGuardsData[i] === 1) {
@@ -142,7 +157,7 @@ function initRoomEntities() {
             let ty = Math.floor(i / COLS);
             activeGuards.push({
                 x: tx * TILE_SIZE, y: ty * TILE_SIZE, startX: tx * TILE_SIZE, facingRight: false, speed: 1.2
-                });
+            });
         }
     }
 }
@@ -152,7 +167,6 @@ function resetGameSession() {
     inventoryHasKey = false;
     player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
     
-    // Deep clone item map structure into tracking arrays
     for (let r = 0; r < TOTAL_ROOMS; r++) {
         for (let i = 0; i < SCREEN_SIZE; i++) {
             runtimeItemMap[r][i] = itemSpawnMap[r][i];
@@ -192,12 +206,11 @@ document.getElementById("roomBtn").addEventListener("click", function() {
     currentRoom = (currentRoom + 1) % TOTAL_ROOMS;
 });
 
-// Coordinate pointer translator across varying screens
 function handleCanvasTouch(e) {
     if (!editMode) return;
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    const touch = e.touches[0];
+    const touch = e.touches;
     const clickX = ((touch.clientX - rect.left) / rect.width) * canvas.width;
     const clickY = ((touch.clientY - rect.top) / rect.height) * canvas.height;
     
@@ -207,7 +220,6 @@ function handleCanvasTouch(e) {
     if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
         const idx = tileY * COLS + tileX;
         
-        // Clear conflicting properties before assigning new type elements
         multiTileMap[currentRoom][idx] = 0;
         guardSpawnMap[currentRoom][idx] = 0;
         itemSpawnMap[currentRoom][idx] = 0;
@@ -229,20 +241,18 @@ function checkCollision(x, y) {
     const tY = Math.floor(y / TILE_SIZE);
     if (tX < 0 || tX >= COLS) return false; 
     if (tY < 0 || tY >= ROWS) return true; 
-    
-    // Check solid environmental layout wall types
     if (multiTileMap[currentRoom][tY * COLS + tX] === 1) return true;
-    
-    // In play mode, locked gates also trigger structural body obstruction collisions
     if (!editMode && runtimeItemMap[currentRoom][tY * COLS + tX] === 5) return true;
-    
     return false;
 }
 
-// Mobile movement manager tracking state overrides
+// Mobile movement manager tracking active character attributes mapping updates
 function movePlayer(dir) {
     if (editMode || player.state === "DEAD") return;
     
+    // Read the speeds and jump force properties dynamically from your active chosen Hero
+    let currentHero = CHARACTERS[selectedCharIndex];
+
     if (player.state === "HANGING") {
         if (dir === "JUMP") {
             player.state = "CLIMBING";
@@ -256,29 +266,9 @@ function movePlayer(dir) {
 
     if (player.state === "CLIMBING") return;
 
-    if (dir === "LEFT") { player.velX = -3; player.facingRight = false; player.state = "RUNNING"; }
-    if (dir === "RIGHT") { player.velX = 3; player.facingRight = true; player.state = "RUNNING"; }
-    if (dir === "JUMP" && player.state !== "LEAPING") { player.velY = -7.5; player.state = "LEAPING"; }
+    if (dir === "LEFT") { player.velX = -currentHero.speed; player.facingRight = false; player.state = "RUNNING"; }
+    if (dir === "RIGHT") { player.velX = currentHero.speed; player.facingRight = true; player.state = "RUNNING"; }
+    if (dir === "JUMP" && player.state !== "LEAPING") { player.velY = currentHero.jumpForce; player.state = "LEAPING"; }
 }
 
 function stopPlayer() {
-    if (editMode || player.state === "HANGING" || player.state === "CLIMBING" || player.state === "DEAD") return;
-    player.velX = 0;
-    if (player.state === "RUNNING") player.state = "IDLE";
-}
-
-function triggerPlayerDeath() {
-    player.state = "DEAD";
-    player.velX = 0;
-    player.animFrame = DEATH_TIMER_MAX; 
-}
-
-function gameLoop() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Render active target tile arrays context profiles
-    let activeMap = multiTileMap[currentRoom];
-    let activeItems = editMode ? itemSpawnMap[currentRoom] : runtimeItemMap[currentRoom];
-
-    for(let y = 0; y < ROWS; y++) {
-        for(let x = 0; x < COLS; x++) {
