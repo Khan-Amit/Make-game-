@@ -1,23 +1,16 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# Mobile Web Browser Cache Artifacts
+.DS_Store
+Thumbs.db
+*.tmp
+*.log
+
+# Standalone Compiled Game Outputs
+StandaloneBuild.html
+MultiScreenGame.html
+PlatformerProjectWithKeys.html
+PlatformerWithHeroChoice.html
+PlatformerWithSfx.html
+
+# Local Test Environment Saves
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+.idea/
