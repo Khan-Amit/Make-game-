@@ -2,6 +2,7 @@
 #include <fstream>
 #include <vector>
 #include <cstring>
+#include "MovementEngine.h" // Include our newly created movement library
 
 const int GRID_WIDTH = 16;
 const int GRID_HEIGHT = 10;
@@ -11,62 +12,86 @@ struct GameData {
     uint8_t tile_map[MAP_SIZE];
 };
 
-// Reads embedded binary payload from its own executable file
-bool read_embedded_assets(const char* exe_path, GameData& out_data) {
-    std::ifstream file(exe_path, std::ios::binary | std::ios::ate);
-    if (!file.is_open()) {
-        std::cerr << "[-] Error opening self binary!" << std::endl;
-        return false;
+class MakeGameEngine {
+private:
+    bool is_running;
+    GameData active_game_data;
+    PlayerCharacter player;     // Added from MovementEngine
+    MovementEngine physics_sys; // Added from MovementEngine
+
+public:
+    MakeGameEngine() : is_running(false) {}
+
+    bool initialize(const char* exe_path) {
+        std::cout << "[MakeGame Engine] Initializing In-House Core Engine..." << std::endl;
+        is_running = true;
+        
+        // Load embedded level assets 
+        read_embedded_assets(exe_path, active_game_data);
+        return true;
     }
 
-    std::streamsize file_size = file.tellg();
-    
-    // Check if file contains at least our minimum footer (4 bytes size + 8 bytes marker = 12 bytes)
-    if (file_size < 12) return false;
-
-    // 1. Read footer marker from the last 12 bytes
-    file.seekg(file_size - 12);
-    uint32_t payload_size = 0;
-    char magic_marker[8];
-
-    file.read(reinterpret_cast<char*>(&payload_size), sizeof(payload_size));
-    file.read(magic_marker, 8);
-
-    // 2. Validate magic marker
-    if (std::memcmp(magic_marker, "MAKEGAME", 8) != 0) {
-        std::cout << "[!] No custom asset package bound. Running in IDE/Debug empty mode." << std::endl;
-        return false; 
+    void run() {
+        // Simple fixed-timestep game frame update simulation loop
+        while (is_running) {
+            process_input();
+            update_physics();
+            render();
+            
+            // Temporary exit safety break so it doesn't loop infinitely in the terminal
+            is_running = false; 
+        }
     }
 
-    // 3. Locate and extract payload block
-    std::streamoff payload_offset = file_size - 12 - payload_size;
-    file.seekg(payload_offset);
-    
-    file.read(reinterpret_cast<char*>(out_data.tile_map), MAP_SIZE);
-    
-    std::cout << "[+] Embedded asset footprint detected and loaded into engine memory!" << std::endl;
-    return true;
-}
+private:
+    // --- THIS IS WHERE THE SAFE INPUT INJECTION SYSTEM LIVES ---
+    void process_input() {
+        std::cout << "[Engine] Processing Safe Input Commands..." << std::endl;
+        
+        // If locked in an un-interruptible state sequence (skidding, landing), ignore new actions
+        if (player.current_state == STATE_STOPPING_SKID || player.current_state == STATE_HANGING) {
+            std::cout << " -> Input locked during locked action state." << std::endl;
+            return; 
+        }
+
+        // Example Action: Simulation of user pushing the 'Right arrow key'
+        player.facing_right = true;
+        player.current_state = STATE_RUNNING;
+    }
+
+    void update_physics() {
+        // Safely evaluate step parameters
+        physics_sys.update_player_physics(player, active_game_data.tile_map, GRID_WIDTH, GRID_HEIGHT);
+    }
+
+    void render() {
+        std::cout << "[Engine Render Frame] Player Position - X: " << player.pixel_x << " Y: " << player.pixel_y << std::endl;
+    }
+
+    bool read_embedded_assets(const char* exe_path, GameData& out_data) {
+        std::ifstream file(exe_path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) return false;
+        std::streamsize file_size = file.tellg();
+        if (file_size < 12) return false;
+
+        file.seekg(file_size - 12);
+        uint32_t payload_size = 0;
+        char magic_marker[8];
+        file.read(reinterpret_cast<char*>(&payload_size), sizeof(payload_size));
+        file.read(magic_marker, 8);
+
+        if (std::memcmp(magic_marker, "MAKEGAME", 8) != 0) return false;
+
+        file.seekg(file_size - 12 - payload_size);
+        file.read(reinterpret_cast<char*>(out_data.tile_map), MAP_SIZE);
+        return true;
+    }
+};
 
 int main(int argc, char* argv[]) {
-    GameData active_game_data = {};
-    
-    // Attempt self-unpacking sequence
-    bool embedded_found = read_embedded_assets(argv[0], active_game_data);
-    
-    if (embedded_found) {
-        // Print the extracted map inside the console to verify execution
-        std::cout << "--- Loaded Grid Layout Map ---" << std::endl;
-        for (int y = 0; y < GRID_HEIGHT; ++y) {
-            for (int x = 0; x < GRID_WIDTH; ++x) {
-                std::cout << (int)active_game_data.tile_map[y * GRID_WIDTH + x] << " ";
-            }
-            std::cout << std::endl;
-        }
-    } else {
-        std::cout << "[*] Loading default blank room state configuration." << std::endl;
+    MakeGameEngine engine;
+    if (engine.initialize(argv[0])) {
+        engine.run();
     }
-    
-    std::cout << "\n[Engine Setup Finished] Standing by for execution window loop..." << std::endl;
     return 0;
 }
