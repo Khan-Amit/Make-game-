@@ -35,7 +35,7 @@
         button { 
             flex: 1;
             padding: 12px 4px; 
-            font-size: 0.75rem;
+            font-size: 0.72rem;
             font-weight: bold; 
             background: #2d2d3a; 
             color: #fff; 
@@ -100,16 +100,19 @@ const SCREEN_SIZE = COLS * ROWS;
 const TOTAL_ROOMS = 3; 
 
 let editMode = true; 
-let currentTool = 1; // 1 = Floor, 2 = Spikes, 3 = Guard
+let currentTool = 1; // 1 = Floor, 2 = Spikes, 3 = Guard, 4 = Key, 5 = Lock Gate
 const DEATH_TIMER_MAX = 45; 
 let currentRoom = 0; 
 
 // Setup Multi-Screen Space Arrays
 let multiTileMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
 let guardSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
+let itemSpawnMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0)); // 4 = Key, 5 = Locked Gate
 
-// Runtime list of active instanced guards
+// Active mutable session instances for testing/building
 let activeGuards = [];
+let runtimeItemMap = Array(TOTAL_ROOMS).fill(null).map(() => Array(SCREEN_SIZE).fill(0));
+let inventoryHasKey = false; 
 
 // Generate base platforms across all rooms
 for (let r = 0; r < TOTAL_ROOMS; r++) {
@@ -127,24 +130,35 @@ let player = {
     animFrame: 0
 };
 
-function initGuardsForRoom() {
+function initRoomEntities() {
     activeGuards = [];
-    if (editMode) return; // Only process running instances in play test mode
+    if (editMode) return;
     
+    // Instantiate enemy guards for this specific scene
     let currentGuardsData = guardSpawnMap[currentRoom];
     for (let i = 0; i < SCREEN_SIZE; i++) {
         if (currentGuardsData[i] === 1) {
             let tx = i % COLS;
             let ty = Math.floor(i / COLS);
             activeGuards.push({
-                x: tx * TILE_SIZE,
-                y: ty * TILE_SIZE,
-                startX: tx * TILE_SIZE,
-                facingRight: false,
-                speed: 1.2
-            });
+                x: tx * TILE_SIZE, y: ty * TILE_SIZE, startX: tx * TILE_SIZE, facingRight: false, speed: 1.2
+                });
         }
     }
+}
+
+function resetGameSession() {
+    currentRoom = 0;
+    inventoryHasKey = false;
+    player.x = 64; player.y = 64; player.velX = 0; player.velY = 0; player.state = "IDLE";
+    
+    // Deep clone item map structure into tracking arrays
+    for (let r = 0; r < TOTAL_ROOMS; r++) {
+        for (let i = 0; i < SCREEN_SIZE; i++) {
+            runtimeItemMap[r][i] = itemSpawnMap[r][i];
+        }
+    }
+    initRoomEntities();
 }
 
 function toggleMode() {
@@ -157,25 +171,20 @@ function toggleMode() {
     } else {
         modeText.innerText = "Play Test";
         modeText.style.color = "#00e676";
-        // Reset player placement configuration state
-        currentRoom = 0;
-        player.x = 64; 
-        player.y = 64; 
-        player.velX = 0; 
-        player.velY = 0; 
-        player.state = "IDLE";
-        initGuardsForRoom();
+        resetGameSession();
     }
 }
 
 function toggleTool() {
     currentTool++;
-    if (currentTool > 3) currentTool = 1;
+    if (currentTool > 5) currentTool = 1;
     
     const toolBtn = document.getElementById("toolBtn");
     if (currentTool === 1) toolBtn.innerHTML = 'TOOL: <span style="color:#ff9100;">Floor</span>';
     else if (currentTool === 2) toolBtn.innerHTML = 'TOOL: <span style="color:#ff1744;">Spikes</span>';
     else if (currentTool === 3) toolBtn.innerHTML = 'TOOL: <span style="color:#b388ff;">Guard</span>';
+    else if (currentTool === 4) toolBtn.innerHTML = 'TOOL: <span style="color:#ffd600;">Key</span>';
+    else if (currentTool === 5) toolBtn.innerHTML = 'TOOL: <span style="color:#cfd8dc;">Gate</span>';
 }
 
 document.getElementById("roomBtn").addEventListener("click", function() {
@@ -198,14 +207,17 @@ function handleCanvasTouch(e) {
     if(tileX >= 0 && tileX < COLS && tileY >= 0 && tileY < ROWS) {
         const idx = tileY * COLS + tileX;
         
-        if (currentTool === 3) {
-            // Toggle guard spawn flag inside this map index slot
-            guardSpawnMap[currentRoom][idx] = guardSpawnMap[currentRoom][idx] === 1 ? 0 : 1;
-            multiTileMap[currentRoom][idx] = 0; // Guard spot can't be a solid wall block simultaneously
-        } else {
-            // Paint map blocks or spikes and clear previous guard traces at that exact slot index
-            guardSpawnMap[currentRoom][idx] = 0;
-            multiTileMap[currentRoom][idx] = multiTileMap[currentRoom][idx] === currentTool ? 0 : currentTool; 
+        // Clear conflicting properties before assigning new type elements
+        multiTileMap[currentRoom][idx] = 0;
+        guardSpawnMap[currentRoom][idx] = 0;
+        itemSpawnMap[currentRoom][idx] = 0;
+
+        if (currentTool === 1 || currentTool === 2) {
+            multiTileMap[currentRoom][idx] = currentTool;
+        } else if (currentTool === 3) {
+            guardSpawnMap[currentRoom][idx] = 1;
+        } else if (currentTool === 4 || currentTool === 5) {
+            itemSpawnMap[currentRoom][idx] = currentTool;
         }
     }
 }
@@ -217,7 +229,14 @@ function checkCollision(x, y) {
     const tY = Math.floor(y / TILE_SIZE);
     if (tX < 0 || tX >= COLS) return false; 
     if (tY < 0 || tY >= ROWS) return true; 
-    return multiTileMap[currentRoom][tY * COLS + tX] === 1;
+    
+    // Check solid environmental layout wall types
+    if (multiTileMap[currentRoom][tY * COLS + tX] === 1) return true;
+    
+    // In play mode, locked gates also trigger structural body obstruction collisions
+    if (!editMode && runtimeItemMap[currentRoom][tY * COLS + tX] === 5) return true;
+    
+    return false;
 }
 
 // Mobile movement manager tracking state overrides
@@ -230,8 +249,7 @@ function movePlayer(dir) {
             player.animFrame = 0;
         }
         if (dir === "CROUCH") {
-            player.state = "LEAPING"; 
-            player.y += 4; 
+            player.state = "LEAPING"; player.y += 4; 
         }
         return;
     }
@@ -257,28 +275,10 @@ function triggerPlayerDeath() {
 
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    document.getElementById("roomText").innerText = currentRoom;
 
+    // Render active target tile arrays context profiles
     let activeMap = multiTileMap[currentRoom];
+    let activeItems = editMode ? itemSpawnMap[currentRoom] : runtimeItemMap[currentRoom];
 
-    // 1. Rasterize current environment maps onto display grid panel
     for(let y = 0; y < ROWS; y++) {
         for(let x = 0; x < COLS; x++) {
-            const tile = activeMap[y * COLS + x];
-            if(tile === 1) {
-                ctx.fillStyle = "#4e342e"; 
-                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-                ctx.strokeStyle = "#3e2723";
-                ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            } else if(tile === 2) {
-                ctx.fillStyle = "#ff1744"; 
-                ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + 24, TILE_SIZE, 8);
-                ctx.beginPath();
-                for(let i = 0; i < 3; i++) {
-                    let startX = x * TILE_SIZE + (i * 10) + 2;
-                    ctx.moveTo(startX, y * TILE_SIZE + 24);
-                    ctx.lineTo(startX + 4, y * TILE_SIZE + 8);
-                    ctx.lineTo(startX + 8, y * TILE_SIZE + 24);
-                }
-                ctx.fill();
-            } else {
